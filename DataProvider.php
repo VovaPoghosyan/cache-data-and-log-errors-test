@@ -21,11 +21,11 @@ class DataProvider
     }
 
     /**
-     * @param array $request
+     * @param string $key
      *
-     * @return array
+     * @return @mixed
      */
-    public function get(array $request)
+    public function get(string $key)
     {
         // returns a response from external service
     }

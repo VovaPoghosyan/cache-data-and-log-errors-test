@@ -10,8 +10,8 @@ use src\Integration\DataProvider;
 
 class DecoratorManager extends DataProvider
 {
-    public $cache;
-    public $logger;
+    protected $cache;
+    protected $logger;
 
     /**
      * @param string $host
@@ -19,14 +19,10 @@ class DecoratorManager extends DataProvider
      * @param string $password
      * @param CacheItemPoolInterface $cache
      */
-    public function __construct($host, $user, $password, CacheItemPoolInterface $cache)
+    public function __construct($host, $user, $password, CacheItemPoolInterface $cache, LoggerInterface $logger)
     {
         parent::__construct($host, $user, $password);
         $this->cache = $cache;
-    }
-
-    public function setLogger(LoggerInterface $logger)
-    {
         $this->logger = $logger;
     }
 
@@ -35,31 +31,31 @@ class DecoratorManager extends DataProvider
      */
     public function getResponse(array $input)
     {
+        $response = [];
         try {
-            $cacheKey = $this->getCacheKey($input);
-            $cacheItem = $this->cache->getItem($cacheKey);
-            if ($cacheItem->isHit()) {
-                return $cacheItem->get();
+            $cacheItems = $this->cache->getItems($input);
+            foreach ($cacheItems as $key => $cacheItem) {
+                if ($cacheItem->isHit()) {
+                    $response[$key] = $cacheItem->get();
+                    continue;
+                }
+                $result = parent::get($key);
+                if(empty($result)) {
+                    $this->logger->notice("Notice: The server hasn't value with that key!");
+                } else {
+                    $cacheItem
+                        ->set($result)
+                        ->expiresAt(
+                            (new DateTime())->modify('+1 day')
+                        );
+                    $this->cache->save($cacheItem);
+                    $response[$key] = $result;
+                }
             }
-
-            $result = parent::get($input);
-
-            $cacheItem
-                ->set($result)
-                ->expiresAt(
-                    (new DateTime())->modify('+1 day')
-                );
-
-            return $result;
         } catch (Exception $e) {
-            $this->logger->critical('Error');
+            $this->logger->critical("Error: $e->getMessage()");
         }
 
-        return [];
-    }
-
-    public function getCacheKey(array $input)
-    {
-        return json_encode($input);
+        return $response;
     }
 }
